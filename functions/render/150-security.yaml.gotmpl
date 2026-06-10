@@ -34,7 +34,7 @@ spec:
 {{- range $rule := $efs.security.rules }}
 ---
 apiVersion: ec2.aws.m.upbound.io/v1beta1
-kind: SecurityGroupIngressRule
+kind: SecurityGroupRule
 metadata:
   name: {{ $rule.name }}
   annotations:
@@ -47,10 +47,10 @@ spec:
     description: Allow EFS NFS from {{ $rule.clientSecurityGroupId }}
     fromPort: 2049
     toPort: 2049
-    ipProtocol: tcp
+    protocol: tcp
+    type: ingress
     securityGroupId: {{ $efs.security.securityGroupId }}
-    referencedSecurityGroupId: {{ $rule.clientSecurityGroupId }}
-    tags: {{ $rule.tags | toJson }}
+    sourceSecurityGroupId: {{ $rule.clientSecurityGroupId }}
   providerConfigRef:
     name: {{ $efs.providerConfigRefs.aws.name }}
     kind: {{ $efs.providerConfigRefs.aws.kind }}
@@ -72,7 +72,7 @@ spec:
       name: {{ $efs.security.securityGroupName }}
   by:
     apiVersion: ec2.aws.m.upbound.io/v1beta1
-    kind: SecurityGroupIngressRule
+    kind: SecurityGroupRule
     resourceRef:
       name: {{ $rule.name }}
 {{- end }}

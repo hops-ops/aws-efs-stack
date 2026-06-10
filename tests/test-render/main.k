@@ -40,6 +40,25 @@ _observed_security_group = {
     }
 }
 
+_observed_pod_identity = {
+    apiVersion = "aws.hops.ops.com.ai/v1alpha1"
+    kind = "PodIdentity"
+    metadata = {
+        name = "gitkb-efs-csi"
+        annotations = {"crossplane.io/composition-resource-name" = "csi-pod-identity"}
+    }
+    status = {
+        conditions = _ready
+        podIdentity = {
+            association = {
+                id = "a-0123456789abcdef0"
+                associationArn = "arn:aws:eks:us-east-2:123456789012:podidentityassociation/platform/a-0123456789abcdef0"
+                roleArn = "arn:aws:iam::123456789012:role/gitkb-efs-csi"
+            }
+        }
+    }
+}
+
 _base_spec = {
     region = "us-east-2"
     cluster = {
@@ -122,7 +141,45 @@ _items = [
                         managedPolicyArns = [
                             "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy"
                         ]
+                        association = {
+                            create = False
+                        }
                     }
+                }
+            ]
+        }
+    }
+
+    {
+        apiVersion = "meta.dev.upbound.io/v1alpha1"
+        kind = "CompositionTest"
+        metadata.name = "observed-pod-identity-configures-addon-association"
+        spec = {
+            compositionPath = _composition
+            xrdPath = _xrd
+            timeoutSeconds = 60
+            validate = False
+            xr = {
+                apiVersion = "aws.hops.ops.com.ai/v1alpha1"
+                kind = "EFSStorageStack"
+                metadata.name = "gitkb"
+                metadata.namespace = "default"
+                spec = _base_spec
+            }
+            observedResources = [
+                _observed_pod_identity
+            ]
+            assertResources = [
+                {
+                    apiVersion = "eks.aws.m.upbound.io/v1beta1"
+                    kind = "Addon"
+                    metadata.name = "gitkb-efs-csi"
+                    spec.forProvider.podIdentityAssociation = [
+                        {
+                            serviceAccount = "efs-csi-controller-sa"
+                            roleArn = "arn:aws:iam::123456789012:role/gitkb-efs-csi"
+                        }
+                    ]
                 }
             ]
         }
@@ -160,14 +217,16 @@ _items = [
                 }
                 {
                     apiVersion = "ec2.aws.m.upbound.io/v1beta1"
-                    kind = "SecurityGroupIngressRule"
+                    kind = "SecurityGroupRule"
                     metadata.name = "gitkb-nfs-sg-0123456789abcdef0"
                     spec.forProvider = {
                         region = "us-east-2"
                         fromPort = 2049
                         toPort = 2049
+                        protocol = "tcp"
+                        type = "ingress"
                         securityGroupId = "sg-0efsmounttarget"
-                        referencedSecurityGroupId = "sg-0123456789abcdef0"
+                        sourceSecurityGroupId = "sg-0123456789abcdef0"
                     }
                 }
                 {

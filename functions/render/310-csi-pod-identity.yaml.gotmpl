@@ -36,6 +36,8 @@ spec:
     name: {{ $efs.csi.serviceAccount.name }}
   managedPolicyArns:
     - {{ $efs.csi.podIdentity.policyArn }}
+  association:
+    create: false
 {{- end }}
 
 {{- if and ($state.observed.addon.ready | default false) ($state.observed.podIdentity.ready | default false) }}

@@ -22,6 +22,11 @@ spec:
     {{- if $efs.csi.version }}
     addonVersion: {{ $efs.csi.version }}
     {{- end }}
+    {{- if and $efs.csi.renderPodIdentity $state.observed.podIdentity.roleArn }}
+    podIdentityAssociation:
+      - serviceAccount: {{ $efs.csi.serviceAccount.name }}
+        roleArn: {{ $state.observed.podIdentity.roleArn }}
+    {{- end }}
     resolveConflictsOnCreate: OVERWRITE
     resolveConflictsOnUpdate: OVERWRITE
     tags: {{ mergeOverwrite (dict "Name" $efs.csi.addonResourceName) $efs.tags | toJson }}

@@ -27,7 +27,7 @@ spec:
   - apiVersion: pkg.crossplane.io/v1
     kind: Configuration
     package: ghcr.io/hops-ops/aws-pod-identity
-    version: '>=v0.10.1'
+    version: '>=v0.12.0'
   description: EFS shared file storage, EKS CSI integration, and RWX StorageClasses.
   license: Apache-2.0
   maintainer: Patrick Lee Scott <pat@patscott.io>

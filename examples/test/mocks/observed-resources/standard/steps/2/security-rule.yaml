@@ -1,5 +1,5 @@
 apiVersion: ec2.aws.m.upbound.io/v1beta1
-kind: SecurityGroupIngressRule
+kind: SecurityGroupRule
 metadata:
   name: gitkb-nfs-sg-0123456789abcdef0
   annotations:
