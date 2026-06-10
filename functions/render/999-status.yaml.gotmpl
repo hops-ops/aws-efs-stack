@@ -1,0 +1,33 @@
+# code: language=yaml
+#
+# Update XR status.
+#
+
+{{- $xr := getCompositeResource . }}
+{{- $s := $state.status }}
+---
+apiVersion: {{ $xr.apiVersion }}
+kind: {{ $xr.kind }}
+status:
+  ready: {{ $s.ready }}
+  fileSystem:
+    id: {{ $s.fileSystem.id | quote }}
+    arn: {{ $s.fileSystem.arn | quote }}
+    dnsName: {{ $s.fileSystem.dnsName | quote }}
+    encrypted: {{ $s.fileSystem.encrypted }}
+  mountTargets:
+    {{- toYaml $s.mountTargets | nindent 4 }}
+  securityGroup:
+    id: {{ $s.securityGroup.id | quote }}
+    arn: {{ $s.securityGroup.arn | quote }}
+  csi:
+    mode: {{ $s.csi.mode | quote }}
+    addonName: {{ $s.csi.addonName | quote }}
+    addonVersion: {{ $s.csi.addonVersion | quote }}
+    addonArn: {{ $s.csi.addonArn | quote }}
+    serviceAccount: {{ $s.csi.serviceAccount | quote }}
+    podIdentityAssociationId: {{ $s.csi.podIdentityAssociationId | quote }}
+    podIdentityAssociationArn: {{ $s.csi.podIdentityAssociationArn | quote }}
+    podIdentityRoleArn: {{ $s.csi.podIdentityRoleArn | quote }}
+  storageClasses:
+    {{- toYaml $s.storageClasses | nindent 4 }}

@@ -1,0 +1,68 @@
+# code: language=yaml
+#
+# Optional static EFS access points.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.accessPoints.render }}
+{{- range $ap := $efs.accessPoints.items }}
+---
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: AccessPoint
+metadata:
+  name: {{ $ap.name }}
+  annotations:
+    {{ setResourceNameAnnotation $ap.resourceKey }}
+    {{- if $ap.externalName }}
+    crossplane.io/external-name: {{ $ap.externalName }}
+    {{- end }}
+  labels: {{ $ap.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.fileSystem.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    fileSystemId: {{ $efs.fileSystem.id }}
+    rootDirectory:
+      path: {{ $ap.path }}
+      {{- if $ap.creationInfo }}
+      creationInfo:
+        ownerUid: {{ $ap.creationInfo.ownerUid }}
+        ownerGid: {{ $ap.creationInfo.ownerGid }}
+        permissions: {{ $ap.creationInfo.permissions | quote }}
+      {{- end }}
+    {{- if $ap.posixUser }}
+    posixUser:
+      uid: {{ $ap.posixUser.uid }}
+      gid: {{ $ap.posixUser.gid }}
+      {{- if $ap.posixUser.secondaryGids }}
+      secondaryGids: {{ $ap.posixUser.secondaryGids | toJson }}
+      {{- end }}
+    {{- end }}
+    tags: {{ $ap.tags | toJson }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- if and ($state.observed.fileSystem.ready | default false) (get $state.observed.ready $ap.resourceKey | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-{{ $ap.resourceKey }}-before-file-system
+  annotations:
+    {{ setResourceNameAnnotation (printf "usage-%s-file-system" $ap.resourceKey) }}
+  labels: {{ $ap.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: FileSystem
+    resourceRef:
+      name: {{ $efs.fileSystem.name }}
+  by:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: AccessPoint
+    resourceRef:
+      name: {{ $ap.name }}
+{{- end }}
+{{- end }}
+{{- end }}

@@ -1,0 +1,15 @@
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: BackupPolicy
+metadata:
+  name: gitkb
+  annotations:
+    crossplane.io/composition-resource-name: backup-policy
+    gotemplating.fn.crossplane.io/composition-resource-name: backup-policy
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    fileSystemId: fs-0123456789abcdef0

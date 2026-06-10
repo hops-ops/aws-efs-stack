@@ -1,0 +1,183 @@
+# code: language=yaml
+#
+# Initialize $state with raw and effective spec values.
+#
+
+{{- $xr := getCompositeResource . }}
+{{- $metadata := $xr.metadata | default dict }}
+{{- $spec := $xr.spec | default dict }}
+
+{{- $name := $metadata.name | default "efs-storage" }}
+{{- $region := $spec.region | default "" }}
+{{- $managementPolicies := $spec.managementPolicies | default (list "*") }}
+
+{{- $defaults := dict
+  "hops.ops.com.ai/managed" "true"
+  (printf "hops.ops.com.ai/%s" (lower $xr.kind)) $name
+}}
+{{- $labels := mergeOverwrite (dict) $defaults ($spec.labels | default dict) }}
+{{- $tags := mergeOverwrite (dict) $defaults ($spec.tags | default dict) }}
+
+{{- $providerConfigRefs := $spec.providerConfigRefs | default dict }}
+{{- $awsProviderConfigSpec := $providerConfigRefs.aws | default dict }}
+{{- $awsProviderConfigRef := dict
+  "name" ($awsProviderConfigSpec.name | default "default")
+  "kind" ($awsProviderConfigSpec.kind | default "ProviderConfig")
+}}
+
+{{- $clusterSpec := $spec.cluster | default dict }}
+{{- $clusterName := $clusterSpec.name | default "" }}
+{{- $kubernetesProviderConfigSpec := $providerConfigRefs.kubernetes | default dict }}
+{{- $kubernetesProviderConfigRef := dict
+  "name" ($kubernetesProviderConfigSpec.name | default $clusterName | default "default")
+  "kind" ($kubernetesProviderConfigSpec.kind | default "ProviderConfig")
+}}
+
+{{- $clusterAddonSpec := $clusterSpec.addon | default dict }}
+{{- $clusterInstallEfsCsiDriver := true }}
+{{- if hasKey $clusterAddonSpec "installEfsCsiDriver" }}
+  {{- $clusterInstallEfsCsiDriver = $clusterAddonSpec.installEfsCsiDriver }}
+{{- end }}
+
+{{- $clusterPodIdentitySpec := $clusterSpec.podIdentity | default dict }}
+{{- $clusterPodIdentityEnabled := true }}
+{{- if hasKey $clusterPodIdentitySpec "enabled" }}
+  {{- $clusterPodIdentityEnabled = $clusterPodIdentitySpec.enabled }}
+{{- end }}
+
+{{- $networkSpec := $spec.network | default dict }}
+
+{{- $fileSystemSpec := $spec.fileSystem | default dict }}
+{{- $fileSystemCreate := true }}
+{{- if hasKey $fileSystemSpec "create" }}
+  {{- $fileSystemCreate = $fileSystemSpec.create }}
+{{- end }}
+{{- $fileSystemExternalName := $fileSystemSpec.externalName | default "" }}
+{{- if and (not $fileSystemCreate) (eq $fileSystemExternalName "") }}
+  {{- fail "spec.fileSystem.externalName is required when spec.fileSystem.create is false" }}
+{{- end }}
+{{- $fileSystemEncrypted := true }}
+{{- if hasKey $fileSystemSpec "encrypted" }}
+  {{- $fileSystemEncrypted = $fileSystemSpec.encrypted }}
+{{- end }}
+{{- $fileSystemManagementPolicies := list }}
+{{- if hasKey $fileSystemSpec "managementPolicies" }}
+  {{- $fileSystemManagementPolicies = $fileSystemSpec.managementPolicies }}
+{{- else if $fileSystemCreate }}
+  {{- $fileSystemManagementPolicies = list "Create" "Observe" "Update" "LateInitialize" }}
+{{- else }}
+  {{- $fileSystemManagementPolicies = list "Observe" "LateInitialize" }}
+{{- end }}
+{{- $backupPolicySpec := $fileSystemSpec.backupPolicy | default dict }}
+{{- $backupPolicyEnabled := true }}
+{{- if hasKey $backupPolicySpec "enabled" }}
+  {{- $backupPolicyEnabled = $backupPolicySpec.enabled }}
+{{- end }}
+
+{{- $securitySpec := $spec.security | default dict }}
+{{- $manageSecurityGroup := true }}
+{{- if hasKey $securitySpec "manageSecurityGroup" }}
+  {{- $manageSecurityGroup = $securitySpec.manageSecurityGroup }}
+{{- end }}
+{{- $allowNfsFromClientSecurityGroups := true }}
+{{- if hasKey $securitySpec "allowNfsFromClientSecurityGroups" }}
+  {{- $allowNfsFromClientSecurityGroups = $securitySpec.allowNfsFromClientSecurityGroups }}
+{{- end }}
+{{- if and (not $manageSecurityGroup) (eq ($securitySpec.securityGroupId | default "") "") }}
+  {{- fail "spec.security.securityGroupId is required when spec.security.manageSecurityGroup is false" }}
+{{- end }}
+
+{{- $csiSpec := $spec.csi | default dict }}
+{{- $csiMode := $csiSpec.mode | default "" }}
+{{- if eq $csiMode "" }}
+  {{- if $clusterInstallEfsCsiDriver }}
+    {{- $csiMode = "eksAddon" }}
+  {{- else }}
+    {{- $csiMode = "existing" }}
+  {{- end }}
+{{- end }}
+{{- $csiServiceAccountSpec := $csiSpec.serviceAccount | default dict }}
+{{- $csiPodIdentitySpec := $csiSpec.podIdentity | default dict }}
+{{- $csiPodIdentityEnabled := $clusterPodIdentityEnabled }}
+{{- if hasKey $csiPodIdentitySpec "enabled" }}
+  {{- $csiPodIdentityEnabled = $csiPodIdentitySpec.enabled }}
+{{- end }}
+
+{{- $storageClassSpecs := list }}
+{{- if hasKey $spec "storageClasses" }}
+  {{- $storageClassSpecs = $spec.storageClasses | default list }}
+{{- else }}
+  {{- $storageClassSpecs = list (dict "name" "efs-gitkb") }}
+{{- end }}
+
+{{- $state := dict
+  "spec" (dict
+    "raw" $spec
+    "effective" (dict
+      "name" $name
+      "region" $region
+      "managementPolicies" $managementPolicies
+      "labels" $labels
+      "tags" $tags
+      "providerConfigRefs" (dict
+        "aws" $awsProviderConfigRef
+        "kubernetes" $kubernetesProviderConfigRef
+      )
+      "cluster" (dict
+        "name" $clusterName
+        "addon" (dict
+          "installEfsCsiDriver" $clusterInstallEfsCsiDriver
+        )
+        "podIdentity" (dict
+          "enabled" $clusterPodIdentityEnabled
+        )
+      )
+      "network" (dict
+        "vpcId" ($networkSpec.vpcId | default "")
+        "subnetIds" ($networkSpec.subnetIds | default list)
+        "clientSecurityGroupIds" ($networkSpec.clientSecurityGroupIds | default list)
+      )
+      "fileSystem" (dict
+        "create" $fileSystemCreate
+        "externalName" $fileSystemExternalName
+        "encrypted" $fileSystemEncrypted
+        "kmsKeyId" ($fileSystemSpec.kmsKeyId | default "")
+        "performanceMode" ($fileSystemSpec.performanceMode | default "generalPurpose")
+        "throughputMode" ($fileSystemSpec.throughputMode | default "elastic")
+        "provisionedThroughputInMibps" ($fileSystemSpec.provisionedThroughputInMibps | default 0)
+        "managementPolicies" $fileSystemManagementPolicies
+        "backupPolicy" (dict
+          "enabled" $backupPolicyEnabled
+        )
+        "forProvider" ($fileSystemSpec.forProvider | default dict)
+      )
+      "security" (dict
+        "manageSecurityGroup" $manageSecurityGroup
+        "securityGroupId" ($securitySpec.securityGroupId | default "")
+        "externalName" ($securitySpec.externalName | default "")
+        "allowNfsFromClientSecurityGroups" $allowNfsFromClientSecurityGroups
+      )
+      "csi" (dict
+        "mode" $csiMode
+        "addonName" ($csiSpec.addonName | default "aws-efs-csi-driver")
+        "version" ($csiSpec.version | default "")
+        "serviceAccount" (dict
+          "namespace" ($csiServiceAccountSpec.namespace | default "kube-system")
+          "name" ($csiServiceAccountSpec.name | default "efs-csi-controller-sa")
+        )
+        "podIdentity" (dict
+          "enabled" $csiPodIdentityEnabled
+          "policyArn" ($csiPodIdentitySpec.policyArn | default "arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy")
+          "rolePrefix" ($csiPodIdentitySpec.rolePrefix | default "")
+          "roleNameOverride" ($csiPodIdentitySpec.roleNameOverride | default "")
+          "permissionsBoundaryArn" ($csiPodIdentitySpec.permissionsBoundaryArn | default "")
+        )
+      )
+      "storageClasses" $storageClassSpecs
+      "accessPoints" ($spec.accessPoints | default list)
+    )
+  )
+  "observed" (dict)
+  "efs" (dict)
+  "status" (dict)
+}}

@@ -1,0 +1,40 @@
+apiVersion: meta.dev.upbound.io/v2alpha1
+kind: Project
+metadata:
+  name: aws-efs-stack
+spec:
+  dependsOn:
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Function
+    package: xpkg.crossplane.io/crossplane-contrib/function-auto-ready
+    version: '>=v0.6.4'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-aws-efs
+    version: '>=v2.5.0'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-aws-ec2
+    version: '>=v2.5.0'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-aws-eks
+    version: '>=v2.5.0'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Provider
+    package: xpkg.crossplane.io/crossplane-contrib/provider-kubernetes
+    version: '>=v1'
+  - apiVersion: pkg.crossplane.io/v1
+    kind: Configuration
+    package: ghcr.io/hops-ops/aws-pod-identity
+    version: '>=v0.10.1'
+  description: EFS shared file storage, EKS CSI integration, and RWX StorageClasses.
+  license: Apache-2.0
+  maintainer: Patrick Lee Scott <pat@patscott.io>
+  readme: |
+    # aws-efs-stack
+
+    Provisions Amazon EFS shared file storage for EKS workloads and installs
+    the cluster integration needed to consume it through Kubernetes PVCs.
+  repository: ghcr.io/hops-ops/aws-efs-stack
+  source: github.com/hops-ops/aws-efs-stack

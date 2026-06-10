@@ -1,0 +1,86 @@
+# code: language=yaml
+#
+# EFS file system and optional automatic backup policy.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.fileSystem.render }}
+---
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: FileSystem
+metadata:
+  name: {{ $efs.fileSystem.name }}
+  annotations:
+    {{ setResourceNameAnnotation "file-system" }}
+    {{- if $efs.fileSystem.externalName }}
+    crossplane.io/external-name: {{ $efs.fileSystem.externalName }}
+    {{- end }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.fileSystem.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    creationToken: {{ $efs.fileSystem.name }}
+    encrypted: {{ $efs.fileSystem.encrypted }}
+    performanceMode: {{ $efs.fileSystem.performanceMode }}
+    throughputMode: {{ $efs.fileSystem.throughputMode }}
+    {{- if $efs.fileSystem.kmsKeyId }}
+    kmsKeyId: {{ $efs.fileSystem.kmsKeyId }}
+    {{- end }}
+    {{- if and (eq $efs.fileSystem.throughputMode "provisioned") $efs.fileSystem.provisionedThroughputInMibps }}
+    provisionedThroughputInMibps: {{ $efs.fileSystem.provisionedThroughputInMibps }}
+    {{- end }}
+    tags: {{ mergeOverwrite (dict "Name" $efs.fileSystem.name) $efs.tags | toJson }}
+    {{- with $efs.fileSystem.forProvider }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- end }}
+
+{{- if $efs.fileSystem.backupPolicy.enabled }}
+{{- if ne $efs.fileSystem.id "" }}
+---
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: BackupPolicy
+metadata:
+  name: {{ $efs.fileSystem.name }}
+  annotations:
+    {{ setResourceNameAnnotation "backup-policy" }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    fileSystemId: {{ $efs.fileSystem.id }}
+    backupPolicy:
+      status: ENABLED
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- end }}
+{{- end }}
+
+{{- if and $state.observed.fileSystem.ready (get $state.observed.ready "backup-policy" | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-backup-policy-before-file-system
+  annotations:
+    {{ setResourceNameAnnotation "usage-backup-policy-file-system" }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: FileSystem
+    resourceRef:
+      name: {{ $efs.fileSystem.name }}
+  by:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: BackupPolicy
+    resourceRef:
+      name: {{ $efs.fileSystem.name }}
+{{- end }}

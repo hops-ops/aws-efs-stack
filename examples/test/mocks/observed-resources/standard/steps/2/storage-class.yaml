@@ -1,0 +1,13 @@
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: gitkb-efs-gitkb
+  annotations:
+    crossplane.io/composition-resource-name: storage-class-efs-gitkb
+    gotemplating.fn.crossplane.io/composition-resource-name: storage-class-efs-gitkb
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"

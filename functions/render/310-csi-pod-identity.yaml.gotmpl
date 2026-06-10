@@ -1,0 +1,62 @@
+# code: language=yaml
+#
+# EKS Pod Identity for the EFS CSI controller.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.csi.renderPodIdentity }}
+---
+apiVersion: aws.hops.ops.com.ai/v1alpha1
+kind: PodIdentity
+metadata:
+  name: {{ $efs.csi.podIdentityResourceName }}
+  annotations:
+    {{ setResourceNameAnnotation "csi-pod-identity" }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  region: {{ $efs.region }}
+  clusterName: {{ $efs.clusterName }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+  labels: {{ $efs.labels | toJson }}
+  tags: {{ $efs.tags | toJson }}
+  {{- if $efs.csi.podIdentity.rolePrefix }}
+  rolePrefix: {{ $efs.csi.podIdentity.rolePrefix }}
+  {{- end }}
+  {{- if $efs.csi.podIdentity.roleNameOverride }}
+  roleNameOverride: {{ $efs.csi.podIdentity.roleNameOverride }}
+  {{- end }}
+  {{- if $efs.csi.podIdentity.permissionsBoundaryArn }}
+  permissionsBoundaryArn: {{ $efs.csi.podIdentity.permissionsBoundaryArn }}
+  {{- end }}
+  serviceAccount:
+    namespace: {{ $efs.csi.serviceAccount.namespace }}
+    name: {{ $efs.csi.serviceAccount.name }}
+  managedPolicyArns:
+    - {{ $efs.csi.podIdentity.policyArn }}
+{{- end }}
+
+{{- if and ($state.observed.addon.ready | default false) ($state.observed.podIdentity.ready | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-csi-addon-before-pod-identity
+  annotations:
+    {{ setResourceNameAnnotation "usage-csi-addon-pod-identity" }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: aws.hops.ops.com.ai/v1alpha1
+    kind: PodIdentity
+    resourceRef:
+      name: {{ $efs.csi.podIdentityResourceName }}
+  by:
+    apiVersion: eks.aws.m.upbound.io/v1beta1
+    kind: Addon
+    resourceRef:
+      name: {{ $efs.csi.addonResourceName }}
+{{- end }}

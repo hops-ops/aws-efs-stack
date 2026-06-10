@@ -1,0 +1,19 @@
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: MountTarget
+metadata:
+  name: gitkb-subnet-0123456789abcdef0
+  annotations:
+    crossplane.io/composition-resource-name: mount-target-subnet-0123456789abcdef0
+    gotemplating.fn.crossplane.io/composition-resource-name: mount-target-subnet-0123456789abcdef0
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: fsmt-0123456789abcdef0
+    subnetId: subnet-0123456789abcdef0
+    availabilityZoneName: us-east-2a
+    securityGroups:
+      - sg-0efsmounttarget

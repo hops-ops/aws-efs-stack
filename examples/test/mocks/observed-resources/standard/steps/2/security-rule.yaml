@@ -1,0 +1,15 @@
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroupIngressRule
+metadata:
+  name: gitkb-nfs-sg-0123456789abcdef0
+  annotations:
+    crossplane.io/composition-resource-name: security-rule-sg-0123456789abcdef0
+    gotemplating.fn.crossplane.io/composition-resource-name: security-rule-sg-0123456789abcdef0
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: sgr-0123456789abcdef0

@@ -1,0 +1,31 @@
+# code: language=yaml
+#
+# EKS managed add-on for the EFS CSI driver.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.csi.renderAddon }}
+---
+apiVersion: eks.aws.m.upbound.io/v1beta1
+kind: Addon
+metadata:
+  name: {{ $efs.csi.addonResourceName }}
+  annotations:
+    {{ setResourceNameAnnotation "csi-addon" }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    clusterName: {{ $efs.clusterName }}
+    addonName: {{ $efs.csi.addonName }}
+    {{- if $efs.csi.version }}
+    addonVersion: {{ $efs.csi.version }}
+    {{- end }}
+    resolveConflictsOnCreate: OVERWRITE
+    resolveConflictsOnUpdate: OVERWRITE
+    tags: {{ mergeOverwrite (dict "Name" $efs.csi.addonResourceName) $efs.tags | toJson }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- end }}

@@ -1,0 +1,16 @@
+apiVersion: aws.hops.ops.com.ai/v1alpha1
+kind: EFSStorageStack
+metadata:
+  name: gitkb
+  namespace: default
+spec:
+  region: us-east-2
+  cluster:
+    name: platform
+  network:
+    vpcId: vpc-0123456789abcdef0
+    subnetIds:
+      - subnet-0123456789abcdef0
+      - subnet-0fedcba9876543210
+    clientSecurityGroupIds:
+      - sg-0123456789abcdef0

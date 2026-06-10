@@ -1,0 +1,18 @@
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: FileSystem
+metadata:
+  name: gitkb
+  annotations:
+    crossplane.io/composition-resource-name: file-system
+    gotemplating.fn.crossplane.io/composition-resource-name: file-system
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: fs-0123456789abcdef0
+    arn: arn:aws:elasticfilesystem:us-east-2:123456789012:file-system/fs-0123456789abcdef0
+    dnsName: fs-0123456789abcdef0.efs.us-east-2.amazonaws.com
+    encrypted: true

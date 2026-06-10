@@ -1,0 +1,87 @@
+# code: language=yaml
+#
+# Extract observed readiness and atProvider fields.
+#
+
+{{- $raw := $.observed.resources | default dict }}
+{{- $ready := dict }}
+{{- $atProviders := dict }}
+{{- range $key, $entry := $raw }}
+  {{- $resource := $entry.resource | default dict }}
+  {{- $status := $resource.status | default dict }}
+  {{- $resourceReady := false }}
+  {{- range ($status.conditions | default list) }}
+    {{- if and (eq .type "Ready") (eq .status "True") }}
+      {{- $resourceReady = true }}
+    {{- end }}
+  {{- end }}
+  {{- $_ := set $ready $key $resourceReady }}
+  {{- $_ := set $atProviders $key ($status.atProvider | default dict) }}
+{{- end }}
+
+{{- $fileSystemAtProvider := get $atProviders "file-system" | default dict }}
+{{- $securityGroupAtProvider := get $atProviders "security-group" | default dict }}
+{{- $addonAtProvider := get $atProviders "csi-addon" | default dict }}
+
+{{- $podIdentityEntry := get $raw "csi-pod-identity" | default dict }}
+{{- $podIdentityStatus := (($podIdentityEntry.resource | default dict).status | default dict) }}
+{{- $podIdentity := $podIdentityStatus.podIdentity | default dict }}
+{{- $podIdentityAssociation := $podIdentity.association | default dict }}
+
+{{- $mountTargets := dict }}
+{{- range $subnetId := $state.spec.effective.network.subnetIds }}
+  {{- $resourceKey := printf "mount-target-%s" (trimAll "-" (regexReplaceAll "[^a-z0-9-]+" (lower $subnetId) "-")) }}
+  {{- $atProvider := get $atProviders $resourceKey | default dict }}
+  {{- $_ := set $mountTargets $resourceKey (dict
+    "ready" (get $ready $resourceKey | default false)
+    "id" ($atProvider.id | default "")
+    "subnetId" ($atProvider.subnetId | default $subnetId)
+    "availabilityZone" ($atProvider.availabilityZoneName | default "")
+    "securityGroupIds" ($atProvider.securityGroups | default list)
+    "dnsName" ($atProvider.dnsName | default "")
+  ) }}
+{{- end }}
+
+{{- $accessPoints := dict }}
+{{- range $ap := $state.spec.effective.accessPoints }}
+  {{- $resourceKey := printf "access-point-%s" $ap.name }}
+  {{- $atProvider := get $atProviders $resourceKey | default dict }}
+  {{- $_ := set $accessPoints $resourceKey (dict
+    "ready" (get $ready $resourceKey | default false)
+    "id" ($atProvider.id | default "")
+    "arn" ($atProvider.arn | default "")
+    "fileSystemId" ($atProvider.fileSystemId | default "")
+  ) }}
+{{- end }}
+
+{{- $state = set $state "observed" (dict
+  "raw" $raw
+  "ready" $ready
+  "atProviders" $atProviders
+  "fileSystem" (dict
+    "ready" (get $ready "file-system" | default false)
+    "id" ($fileSystemAtProvider.id | default "")
+    "arn" ($fileSystemAtProvider.arn | default "")
+    "dnsName" ($fileSystemAtProvider.dnsName | default "")
+    "encrypted" ($fileSystemAtProvider.encrypted | default false)
+  )
+  "securityGroup" (dict
+    "ready" (get $ready "security-group" | default false)
+    "id" ($securityGroupAtProvider.id | default "")
+    "arn" ($securityGroupAtProvider.arn | default "")
+  )
+  "mountTargets" $mountTargets
+  "accessPoints" $accessPoints
+  "addon" (dict
+    "ready" (get $ready "csi-addon" | default false)
+    "id" ($addonAtProvider.id | default "")
+    "arn" ($addonAtProvider.arn | default "")
+    "addonVersion" ($addonAtProvider.addonVersion | default "")
+  )
+  "podIdentity" (dict
+    "ready" (get $ready "csi-pod-identity" | default false)
+    "associationId" ($podIdentityAssociation.id | default "")
+    "associationArn" ($podIdentityAssociation.associationArn | default "")
+    "roleArn" ($podIdentityAssociation.roleArn | default "")
+  )
+) }}

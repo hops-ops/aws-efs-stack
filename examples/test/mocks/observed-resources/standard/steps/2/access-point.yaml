@@ -1,0 +1,17 @@
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: AccessPoint
+metadata:
+  name: gitkb-gitkb
+  annotations:
+    crossplane.io/composition-resource-name: access-point-gitkb
+    gotemplating.fn.crossplane.io/composition-resource-name: access-point-gitkb
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: fsap-0123456789abcdef0
+    arn: arn:aws:elasticfilesystem:us-east-2:123456789012:access-point/fsap-0123456789abcdef0
+    fileSystemId: fs-0123456789abcdef0

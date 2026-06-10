@@ -1,0 +1,80 @@
+# code: language=yaml
+#
+# Mount target security group and NFS ingress rules.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.security.renderSecurityGroup }}
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroup
+metadata:
+  name: {{ $efs.security.securityGroupName }}
+  annotations:
+    {{ setResourceNameAnnotation "security-group" }}
+    {{- if $efs.security.externalName }}
+    crossplane.io/external-name: {{ $efs.security.externalName }}
+    {{- end }}
+  labels: {{ $efs.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    name: {{ $efs.security.securityGroupName }}
+    description: EFS mount target access for {{ $efs.name }}
+    revokeRulesOnDelete: true
+    vpcId: {{ $state.spec.effective.network.vpcId }}
+    tags: {{ mergeOverwrite (dict "Name" $efs.security.securityGroupName) $efs.tags | toJson }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- end }}
+
+{{- if $efs.security.renderRules }}
+{{- range $rule := $efs.security.rules }}
+---
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroupIngressRule
+metadata:
+  name: {{ $rule.name }}
+  annotations:
+    {{ setResourceNameAnnotation $rule.resourceKey }}
+  labels: {{ $rule.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    description: Allow EFS NFS from {{ $rule.clientSecurityGroupId }}
+    fromPort: 2049
+    toPort: 2049
+    ipProtocol: tcp
+    securityGroupId: {{ $efs.security.securityGroupId }}
+    referencedSecurityGroupId: {{ $rule.clientSecurityGroupId }}
+    tags: {{ $rule.tags | toJson }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- if and ($state.observed.securityGroup.ready | default false) (get $state.observed.ready $rule.resourceKey | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-{{ $rule.resourceKey }}-before-security-group
+  annotations:
+    {{ setResourceNameAnnotation (printf "usage-%s-security-group" $rule.resourceKey) }}
+  labels: {{ $rule.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: ec2.aws.m.upbound.io/v1beta1
+    kind: SecurityGroup
+    resourceRef:
+      name: {{ $efs.security.securityGroupName }}
+  by:
+    apiVersion: ec2.aws.m.upbound.io/v1beta1
+    kind: SecurityGroupIngressRule
+    resourceRef:
+      name: {{ $rule.name }}
+{{- end }}
+{{- end }}
+{{- end }}

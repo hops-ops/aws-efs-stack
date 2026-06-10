@@ -1,0 +1,155 @@
+# code: language=yaml
+#
+# Compute derived EFS stack state.
+#
+
+{{- $eff := $state.spec.effective }}
+{{- $obs := $state.observed }}
+
+{{- $resourceBase := trimAll "-" (trunc 50 (regexReplaceAll "[^a-z0-9-]+" (lower $eff.name) "-")) }}
+{{- $fileSystemName := $resourceBase }}
+{{- $securityGroupName := trimAll "-" (trunc 63 (printf "%s-mt" $resourceBase)) }}
+{{- $addonResourceName := trimAll "-" (trunc 63 (printf "%s-efs-csi" $resourceBase)) }}
+{{- $podIdentityResourceName := $addonResourceName }}
+
+{{- $fileSystemId := $obs.fileSystem.id | default $eff.fileSystem.externalName | default "" }}
+{{- $securityGroupId := "" }}
+{{- if $eff.security.manageSecurityGroup }}
+  {{- $securityGroupId = $obs.securityGroup.id | default $eff.security.externalName | default "" }}
+{{- else }}
+  {{- $securityGroupId = $eff.security.securityGroupId | default "" }}
+{{- end }}
+
+{{- $renderFileSystem := or $eff.fileSystem.create (ne $eff.fileSystem.externalName "") }}
+{{- $renderSecurityGroup := $eff.security.manageSecurityGroup }}
+{{- $renderSecurityGroupRules := and $eff.security.allowNfsFromClientSecurityGroups (ne $securityGroupId "") }}
+{{- $renderBackupPolicy := and $eff.fileSystem.backupPolicy.enabled (ne $fileSystemId "") }}
+{{- $renderMountTargets := and (ne $fileSystemId "") (ne $securityGroupId "") }}
+{{- $renderCsiAddon := eq $eff.csi.mode "eksAddon" }}
+{{- $renderCsiPodIdentity := and $renderCsiAddon $eff.csi.podIdentity.enabled }}
+{{- $renderStorageClasses := ne $fileSystemId "" }}
+
+{{- $securityGroupRules := list }}
+{{- range $clientSecurityGroupId := $eff.network.clientSecurityGroupIds }}
+  {{- $slug := trimAll "-" (regexReplaceAll "[^a-z0-9-]+" (lower $clientSecurityGroupId) "-") }}
+  {{- $resourceName := trimAll "-" (trunc 63 (printf "%s-nfs-%s" $resourceBase $slug)) }}
+  {{- $securityGroupRules = append $securityGroupRules (dict
+    "name" $resourceName
+    "resourceKey" (printf "security-rule-%s" $slug)
+    "clientSecurityGroupId" $clientSecurityGroupId
+    "labels" (mergeOverwrite (dict) $eff.labels (dict "hops.ops.com.ai/efs-client-security-group" $slug))
+    "tags" (mergeOverwrite (dict "Name" $resourceName) $eff.tags (dict "hops.ops.com.ai/efs-client-security-group" $slug))
+  ) }}
+{{- end }}
+
+{{- $mountTargets := list }}
+{{- range $subnetId := $eff.network.subnetIds }}
+  {{- $slug := trimAll "-" (regexReplaceAll "[^a-z0-9-]+" (lower $subnetId) "-") }}
+  {{- $resourceName := trimAll "-" (trunc 63 (printf "%s-%s" $resourceBase $slug)) }}
+  {{- $resourceKey := printf "mount-target-%s" $slug }}
+  {{- $mountTargets = append $mountTargets (dict
+    "name" $resourceName
+    "resourceKey" $resourceKey
+    "subnetId" $subnetId
+    "labels" (mergeOverwrite (dict) $eff.labels (dict "hops.ops.com.ai/efs-subnet" $slug))
+    "observed" (get $obs.mountTargets $resourceKey | default dict)
+  ) }}
+{{- end }}
+
+{{- $accessPoints := list }}
+{{- range $ap := $eff.accessPoints }}
+  {{- $resourceName := trimAll "-" (trunc 63 (printf "%s-%s" $resourceBase $ap.name)) }}
+  {{- $resourceKey := printf "access-point-%s" $ap.name }}
+  {{- $accessPoints = append $accessPoints (dict
+    "name" $resourceName
+    "resourceKey" $resourceKey
+    "externalName" ($ap.externalName | default "")
+    "path" $ap.path
+    "posixUser" ($ap.posixUser | default dict)
+    "creationInfo" ($ap.creationInfo | default dict)
+    "labels" (mergeOverwrite (dict) $eff.labels (dict "hops.ops.com.ai/efs-access-point" $ap.name))
+    "tags" (mergeOverwrite (dict "Name" $resourceName) $eff.tags (dict "hops.ops.com.ai/efs-access-point" $ap.name))
+    "observed" (get $obs.accessPoints $resourceKey | default dict)
+  ) }}
+{{- end }}
+
+{{- $storageClasses := list }}
+{{- range $sc := $eff.storageClasses }}
+  {{- $enabled := true }}
+  {{- if hasKey $sc "enabled" }}
+    {{- $enabled = $sc.enabled }}
+  {{- end }}
+  {{- $defaultClass := false }}
+  {{- if hasKey $sc "defaultClass" }}
+    {{- $defaultClass = $sc.defaultClass }}
+  {{- end }}
+  {{- $allowVolumeExpansion := true }}
+  {{- if hasKey $sc "allowVolumeExpansion" }}
+    {{- $allowVolumeExpansion = $sc.allowVolumeExpansion }}
+  {{- end }}
+  {{- $parameters := mergeOverwrite (dict)
+    (dict
+      "provisioningMode" "efs-ap"
+      "basePath" "/gitkb"
+      "directoryPerms" "750"
+      "subPathPattern" "${.PVC.namespace}/${.PVC.name}"
+      "ensureUniqueDirectory" "true"
+    )
+    ($sc.parameters | default dict)
+    (dict "fileSystemId" $fileSystemId)
+  }}
+  {{- $resourceName := trimAll "-" (trunc 63 (regexReplaceAll "[^a-z0-9-]+" (lower (printf "%s-%s" $resourceBase $sc.name)) "-")) }}
+  {{- $storageClasses = append $storageClasses (dict
+    "name" $sc.name
+    "resourceName" $resourceName
+    "resourceKey" (printf "storage-class-%s" $sc.name)
+    "enabled" $enabled
+    "defaultClass" $defaultClass
+    "reclaimPolicy" ($sc.reclaimPolicy | default "Retain")
+    "volumeBindingMode" ($sc.volumeBindingMode | default "Immediate")
+    "allowVolumeExpansion" $allowVolumeExpansion
+    "mountOptions" ($sc.mountOptions | default (list "tls"))
+    "parameters" $parameters
+    "labels" (mergeOverwrite (dict) $eff.labels (dict "hops.ops.com.ai/storage-class" $sc.name))
+  ) }}
+{{- end }}
+
+{{- $state = set $state "efs" (dict
+  "name" $eff.name
+  "region" $eff.region
+  "clusterName" $eff.cluster.name
+  "managementPolicies" $eff.managementPolicies
+  "providerConfigRefs" $eff.providerConfigRefs
+  "labels" $eff.labels
+  "tags" $eff.tags
+  "fileSystem" (mergeOverwrite (dict) $eff.fileSystem (dict
+    "render" $renderFileSystem
+    "name" $fileSystemName
+    "id" $fileSystemId
+  ))
+  "security" (mergeOverwrite (dict) $eff.security (dict
+    "renderSecurityGroup" $renderSecurityGroup
+    "renderRules" $renderSecurityGroupRules
+    "securityGroupName" $securityGroupName
+    "securityGroupId" $securityGroupId
+    "rules" $securityGroupRules
+  ))
+  "mountTargets" (dict
+    "render" $renderMountTargets
+    "items" $mountTargets
+  )
+  "accessPoints" (dict
+    "render" (and (ne $fileSystemId "") (gt (len $accessPoints) 0))
+    "items" $accessPoints
+  )
+  "csi" (mergeOverwrite (dict) $eff.csi (dict
+    "renderAddon" $renderCsiAddon
+    "renderPodIdentity" $renderCsiPodIdentity
+    "addonResourceName" $addonResourceName
+    "podIdentityResourceName" $podIdentityResourceName
+  ))
+  "storageClasses" (dict
+    "render" $renderStorageClasses
+    "items" $storageClasses
+  )
+) }}

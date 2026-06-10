@@ -1,0 +1,17 @@
+apiVersion: eks.aws.m.upbound.io/v1beta1
+kind: Addon
+metadata:
+  name: gitkb-efs-csi
+  annotations:
+    crossplane.io/composition-resource-name: csi-addon
+    gotemplating.fn.crossplane.io/composition-resource-name: csi-addon
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: platform:aws-efs-csi-driver
+    arn: arn:aws:eks:us-east-2:123456789012:addon/platform/aws-efs-csi-driver/01234567-89ab-cdef-0123-456789abcdef
+    addonVersion: v2.1.13-eksbuild.1

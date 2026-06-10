@@ -1,0 +1,435 @@
+apiVersion: apiextensions.crossplane.io/v2
+kind: CompositeResourceDefinition
+metadata:
+  name: efsstoragestacks.aws.hops.ops.com.ai
+spec:
+  group: aws.hops.ops.com.ai
+  names:
+    categories:
+      - crossplane
+    kind: EFSStorageStack
+    singular: efsstoragestack
+    plural: efsstoragestacks
+  scope: Namespaced
+  defaultCompositeDeletePolicy: Foreground
+  versions:
+  - name: v1alpha1
+    referenceable: true
+    served: true
+    schema:
+      openAPIV3Schema:
+        description: EFSStorageStack provisions Amazon EFS shared file storage and EKS CSI integration for Kubernetes RWX PVCs.
+        type: object
+        properties:
+          spec:
+            description: EFSStorageStackSpec defines the desired EFS file system, networking, CSI, and StorageClass integration.
+            type: object
+            properties:
+              region:
+                description: AWS region for EFS, EC2 security group resources, EKS add-ons, and Pod Identity.
+                type: string
+                minLength: 1
+              managementPolicies:
+                description: Management policies for non-data-bearing composed resources. Defaults to ["*"].
+                type: array
+                items:
+                  type: string
+                  enum:
+                  - "*"
+                  - Create
+                  - Observe
+                  - Update
+                  - Delete
+                  - LateInitialize
+                default:
+                - "*"
+              labels:
+                description: Custom labels applied to all composed Kubernetes resources.
+                type: object
+                additionalProperties:
+                  type: string
+                x-kubernetes-preserve-unknown-fields: true
+              tags:
+                description: Custom tags applied to all taggable AWS resources.
+                type: object
+                additionalProperties:
+                  type: string
+                x-kubernetes-preserve-unknown-fields: true
+              providerConfigRefs:
+                description: ProviderConfig references for AWS and target Kubernetes providers.
+                type: object
+                properties:
+                  aws:
+                    description: AWS ProviderConfig reference. Defaults to ProviderConfig/default.
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        default: default
+                      kind:
+                        type: string
+                        default: ProviderConfig
+                  kubernetes:
+                    description: Kubernetes ProviderConfig reference for target-cluster StorageClass resources. Defaults to cluster.name, then default.
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      kind:
+                        type: string
+                        enum:
+                        - ProviderConfig
+                        - ClusterProviderConfig
+                        default: ProviderConfig
+              cluster:
+                description: Target EKS cluster integration settings.
+                type: object
+                properties:
+                  name:
+                    description: EKS cluster name.
+                    type: string
+                    minLength: 1
+                  addon:
+                    description: Backward-compatible add-on toggle. When false, defaults csi.mode to existing.
+                    type: object
+                    properties:
+                      installEfsCsiDriver:
+                        description: Whether this stack should install the aws-efs-csi-driver managed add-on by default.
+                        type: boolean
+                        default: true
+                  podIdentity:
+                    description: Backward-compatible Pod Identity toggle mirrored into csi.podIdentity.enabled when csi does not override it.
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                required:
+                - name
+              network:
+                description: VPC and client network inputs used to create mount targets and NFS ingress.
+                type: object
+                properties:
+                  vpcId:
+                    description: VPC ID that contains the EKS cluster and EFS mount targets.
+                    type: string
+                    minLength: 1
+                  subnetIds:
+                    description: Subnet IDs for EFS mount targets, normally one subnet per target Availability Zone.
+                    type: array
+                    minItems: 1
+                    items:
+                      type: string
+                      minLength: 1
+                  clientSecurityGroupIds:
+                    description: Security group IDs whose members are allowed to mount EFS over NFS TCP 2049.
+                    type: array
+                    minItems: 1
+                    items:
+                      type: string
+                      minLength: 1
+                required:
+                - vpcId
+                - subnetIds
+                - clientSecurityGroupIds
+              fileSystem:
+                description: EFS file system creation, import, encryption, throughput, and backup settings.
+                type: object
+                properties:
+                  create:
+                    description: Whether Crossplane may create the file system. Set false with externalName to observe/import an existing file system.
+                    type: boolean
+                    default: true
+                  externalName:
+                    description: Existing EFS file system ID to import, such as fs-0123456789abcdef0.
+                    type: string
+                  encrypted:
+                    description: Whether to create an encrypted file system.
+                    type: boolean
+                    default: true
+                  kmsKeyId:
+                    description: Optional KMS key ID or ARN for EFS encryption.
+                    type: string
+                  performanceMode:
+                    description: EFS performance mode.
+                    type: string
+                    enum:
+                    - generalPurpose
+                    - maxIO
+                    default: generalPurpose
+                  throughputMode:
+                    description: EFS throughput mode.
+                    type: string
+                    enum:
+                    - bursting
+                    - provisioned
+                    - elastic
+                    default: elastic
+                  provisionedThroughputInMibps:
+                    description: Provisioned throughput in MiB/s when throughputMode is provisioned.
+                    type: number
+                    minimum: 1
+                  managementPolicies:
+                    description: Management policies for the data-bearing EFS file system. Defaults omit Delete.
+                    type: array
+                    items:
+                      type: string
+                      enum:
+                      - "*"
+                      - Create
+                      - Observe
+                      - Update
+                      - Delete
+                      - LateInitialize
+                  backupPolicy:
+                    description: EFS automatic backup policy.
+                    type: object
+                    properties:
+                      enabled:
+                        description: Whether to render an EFS BackupPolicy.
+                        type: boolean
+                        default: true
+                  forProvider:
+                    description: Optional pass-through fields merged into FileSystem spec.forProvider.
+                    type: object
+                    x-kubernetes-preserve-unknown-fields: true
+              security:
+                description: Mount target security group and NFS ingress settings.
+                type: object
+                properties:
+                  manageSecurityGroup:
+                    description: Whether this stack should manage the mount target security group.
+                    type: boolean
+                    default: true
+                  securityGroupId:
+                    description: Existing security group ID to use for mount targets when manageSecurityGroup is false.
+                    type: string
+                  externalName:
+                    description: Existing security group ID to import when manageSecurityGroup is true.
+                    type: string
+                  allowNfsFromClientSecurityGroups:
+                    description: Whether to create NFS ingress rules from network.clientSecurityGroupIds.
+                    type: boolean
+                    default: true
+              csi:
+                description: EFS CSI driver integration.
+                type: object
+                properties:
+                  mode:
+                    description: CSI integration mode. eksAddon installs the EKS managed add-on; existing assumes the driver already exists.
+                    type: string
+                    enum:
+                    - eksAddon
+                    - existing
+                  addonName:
+                    description: EKS add-on name.
+                    type: string
+                    default: aws-efs-csi-driver
+                  version:
+                    description: Optional EKS add-on version. Empty lets AWS choose the default for the cluster version.
+                    type: string
+                  serviceAccount:
+                    description: EFS CSI controller service account used by Pod Identity.
+                    type: object
+                    properties:
+                      namespace:
+                        type: string
+                        default: kube-system
+                      name:
+                        type: string
+                        default: efs-csi-controller-sa
+                  podIdentity:
+                    description: Pod Identity configuration for the EFS CSI controller.
+                    type: object
+                    properties:
+                      enabled:
+                        type: boolean
+                        default: true
+                      policyArn:
+                        description: IAM managed policy ARN for the EFS CSI controller role.
+                        type: string
+                        default: arn:aws:iam::aws:policy/service-role/AmazonEFSCSIDriverPolicy
+                      rolePrefix:
+                        type: string
+                      roleNameOverride:
+                        type: string
+                      permissionsBoundaryArn:
+                        type: string
+              storageClasses:
+                description: Kubernetes StorageClasses backed by the EFS CSI driver. Defaults to a non-default efs-gitkb class.
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      description: StorageClass metadata.name in the target cluster.
+                      type: string
+                      minLength: 1
+                    enabled:
+                      description: Whether to render this StorageClass.
+                      type: boolean
+                      default: true
+                    defaultClass:
+                      description: Whether to mark this as the cluster default StorageClass.
+                      type: boolean
+                      default: false
+                    reclaimPolicy:
+                      type: string
+                      enum:
+                      - Delete
+                      - Retain
+                      default: Retain
+                    volumeBindingMode:
+                      type: string
+                      enum:
+                      - Immediate
+                      - WaitForFirstConsumer
+                      default: Immediate
+                    allowVolumeExpansion:
+                      type: boolean
+                      default: true
+                    mountOptions:
+                      type: array
+                      items:
+                        type: string
+                      default:
+                      - tls
+                    parameters:
+                      description: StorageClass parameters merged over dynamic access point defaults.
+                      type: object
+                      x-kubernetes-preserve-unknown-fields: true
+                  required:
+                  - name
+              accessPoints:
+                description: Optional static EFS access points for migrations or pre-provisioned consumers.
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      description: Stable access point name used for composed resource naming.
+                      type: string
+                      minLength: 1
+                      maxLength: 40
+                      pattern: "^[a-z0-9]([-a-z0-9]*[a-z0-9])?$"
+                    externalName:
+                      description: Existing EFS access point ID to import.
+                      type: string
+                    path:
+                      description: Root directory path exposed by the access point.
+                      type: string
+                      minLength: 1
+                    posixUser:
+                      type: object
+                      properties:
+                        uid:
+                          type: integer
+                          minimum: 0
+                        gid:
+                          type: integer
+                          minimum: 0
+                        secondaryGids:
+                          type: array
+                          items:
+                            type: integer
+                            minimum: 0
+                      required:
+                      - uid
+                      - gid
+                    creationInfo:
+                      type: object
+                      properties:
+                        ownerUid:
+                          type: integer
+                          minimum: 0
+                        ownerGid:
+                          type: integer
+                          minimum: 0
+                        permissions:
+                          type: string
+                          pattern: "^[0-7]{3,4}$"
+                      required:
+                      - ownerUid
+                      - ownerGid
+                      - permissions
+                  required:
+                  - name
+                  - path
+            required:
+            - region
+            - cluster
+            - network
+          status:
+            description: EFSStorageStackStatus exposes observed values for consumers.
+            type: object
+            properties:
+              ready:
+                description: Whether all rendered composed resources are ready.
+                type: boolean
+              fileSystem:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  arn:
+                    type: string
+                  dnsName:
+                    type: string
+                  encrypted:
+                    type: boolean
+              mountTargets:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    id:
+                      type: string
+                    subnetId:
+                      type: string
+                    availabilityZone:
+                      type: string
+                    securityGroupIds:
+                      type: array
+                      items:
+                        type: string
+              securityGroup:
+                type: object
+                properties:
+                  id:
+                    type: string
+                  arn:
+                    type: string
+              csi:
+                type: object
+                properties:
+                  mode:
+                    type: string
+                  addonName:
+                    type: string
+                  addonVersion:
+                    type: string
+                  addonArn:
+                    type: string
+                  serviceAccount:
+                    type: string
+                  podIdentityAssociationId:
+                    type: string
+                  podIdentityAssociationArn:
+                    type: string
+                  podIdentityRoleArn:
+                    type: string
+              storageClasses:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    name:
+                      type: string
+                    provisioner:
+                      type: string
+                    reclaimPolicy:
+                      type: string
+        required:
+        - spec

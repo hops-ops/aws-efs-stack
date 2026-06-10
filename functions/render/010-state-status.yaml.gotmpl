@@ -1,0 +1,106 @@
+# code: language=yaml
+#
+# Compute XR status from observed resources.
+#
+
+{{- $efs := $state.efs }}
+{{- $readyMap := $state.observed.ready | default dict }}
+
+{{- $ready := true }}
+{{- if and $efs.fileSystem.render (not ($state.observed.fileSystem.ready | default false)) }}
+  {{- $ready = false }}
+{{- end }}
+{{- if and $efs.security.renderSecurityGroup (not ($state.observed.securityGroup.ready | default false)) }}
+  {{- $ready = false }}
+{{- end }}
+{{- if and $efs.fileSystem.backupPolicy.enabled (ne $efs.fileSystem.id "") (not (get $readyMap "backup-policy" | default false)) }}
+  {{- $ready = false }}
+{{- end }}
+{{- if $efs.security.renderRules }}
+  {{- range $rule := $efs.security.rules }}
+    {{- if not (get $readyMap $rule.resourceKey | default false) }}
+      {{- $ready = false }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if $efs.mountTargets.render }}
+  {{- range $target := $efs.mountTargets.items }}
+    {{- if not (get $readyMap $target.resourceKey | default false) }}
+      {{- $ready = false }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if $efs.accessPoints.render }}
+  {{- range $ap := $efs.accessPoints.items }}
+    {{- if not (get $readyMap $ap.resourceKey | default false) }}
+      {{- $ready = false }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+{{- if and $efs.csi.renderAddon (not ($state.observed.addon.ready | default false)) }}
+  {{- $ready = false }}
+{{- end }}
+{{- if and $efs.csi.renderPodIdentity (not ($state.observed.podIdentity.ready | default false)) }}
+  {{- $ready = false }}
+{{- end }}
+{{- if $efs.storageClasses.render }}
+  {{- range $sc := $efs.storageClasses.items }}
+    {{- if and $sc.enabled (not (get $readyMap $sc.resourceKey | default false)) }}
+      {{- $ready = false }}
+    {{- end }}
+  {{- end }}
+{{- end }}
+
+{{- $mountTargetStatus := list }}
+{{- range $target := $efs.mountTargets.items }}
+  {{- $observed := $target.observed | default dict }}
+  {{- $mountTargetStatus = append $mountTargetStatus (dict
+    "name" $target.name
+    "id" ($observed.id | default "")
+    "subnetId" ($observed.subnetId | default $target.subnetId)
+    "availabilityZone" ($observed.availabilityZone | default "")
+    "securityGroupIds" ($observed.securityGroupIds | default list)
+  ) }}
+{{- end }}
+
+{{- $storageClassStatus := list }}
+{{- range $sc := $efs.storageClasses.items }}
+  {{- if $sc.enabled }}
+    {{- $storageClassStatus = append $storageClassStatus (dict
+      "name" $sc.name
+      "provisioner" "efs.csi.aws.com"
+      "reclaimPolicy" $sc.reclaimPolicy
+    ) }}
+  {{- end }}
+{{- end }}
+
+{{- $addonVersion := $state.observed.addon.addonVersion | default "" }}
+{{- if and (eq $addonVersion "") (eq $efs.csi.mode "existing") }}
+  {{- $addonVersion = "existing" }}
+{{- end }}
+
+{{- $state = set $state "status" (dict
+  "ready" $ready
+  "fileSystem" (dict
+    "id" ($efs.fileSystem.id | default "")
+    "arn" ($state.observed.fileSystem.arn | default "")
+    "dnsName" ($state.observed.fileSystem.dnsName | default "")
+    "encrypted" ($state.observed.fileSystem.encrypted | default false)
+  )
+  "mountTargets" $mountTargetStatus
+  "securityGroup" (dict
+    "id" ($efs.security.securityGroupId | default "")
+    "arn" ($state.observed.securityGroup.arn | default "")
+  )
+  "csi" (dict
+    "mode" $efs.csi.mode
+    "addonName" $efs.csi.addonName
+    "addonVersion" $addonVersion
+    "addonArn" ($state.observed.addon.arn | default "")
+    "serviceAccount" (printf "%s/%s" $efs.csi.serviceAccount.namespace $efs.csi.serviceAccount.name)
+    "podIdentityAssociationId" ($state.observed.podIdentity.associationId | default "")
+    "podIdentityAssociationArn" ($state.observed.podIdentity.associationArn | default "")
+    "podIdentityRoleArn" ($state.observed.podIdentity.roleArn | default "")
+  )
+  "storageClasses" $storageClassStatus
+) }}

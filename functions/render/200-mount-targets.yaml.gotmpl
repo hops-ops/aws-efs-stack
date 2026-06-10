@@ -1,0 +1,73 @@
+# code: language=yaml
+#
+# EFS mount targets, one per configured subnet.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.mountTargets.render }}
+{{- range $target := $efs.mountTargets.items }}
+---
+apiVersion: efs.aws.m.upbound.io/v1beta1
+kind: MountTarget
+metadata:
+  name: {{ $target.name }}
+  annotations:
+    {{ setResourceNameAnnotation $target.resourceKey }}
+  labels: {{ $target.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    region: {{ $efs.region }}
+    fileSystemId: {{ $efs.fileSystem.id }}
+    subnetId: {{ $target.subnetId }}
+    securityGroups:
+      - {{ $efs.security.securityGroupId }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.aws.name }}
+    kind: {{ $efs.providerConfigRefs.aws.kind }}
+{{- if and ($state.observed.fileSystem.ready | default false) (get $state.observed.ready $target.resourceKey | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-{{ $target.resourceKey }}-before-file-system
+  annotations:
+    {{ setResourceNameAnnotation (printf "usage-%s-file-system" $target.resourceKey) }}
+  labels: {{ $target.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: FileSystem
+    resourceRef:
+      name: {{ $efs.fileSystem.name }}
+  by:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: MountTarget
+    resourceRef:
+      name: {{ $target.name }}
+{{- end }}
+{{- if and ($state.observed.securityGroup.ready | default false) (get $state.observed.ready $target.resourceKey | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-{{ $target.resourceKey }}-before-security-group
+  annotations:
+    {{ setResourceNameAnnotation (printf "usage-%s-security-group" $target.resourceKey) }}
+  labels: {{ $target.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: ec2.aws.m.upbound.io/v1beta1
+    kind: SecurityGroup
+    resourceRef:
+      name: {{ $efs.security.securityGroupName }}
+  by:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: MountTarget
+    resourceRef:
+      name: {{ $target.name }}
+{{- end }}
+{{- end }}
+{{- end }}

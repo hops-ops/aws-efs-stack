@@ -1,0 +1,64 @@
+# code: language=yaml
+#
+# Kubernetes StorageClasses backed by the EFS CSI driver.
+#
+
+{{- $efs := $state.efs }}
+{{- if $efs.storageClasses.render }}
+{{- range $sc := $efs.storageClasses.items }}
+{{- if $sc.enabled }}
+---
+apiVersion: kubernetes.m.crossplane.io/v1alpha1
+kind: Object
+metadata:
+  name: {{ $sc.resourceName }}
+  annotations:
+    {{ setResourceNameAnnotation $sc.resourceKey }}
+  labels: {{ $sc.labels | toJson }}
+spec:
+  managementPolicies: {{ $efs.managementPolicies | toJson }}
+  forProvider:
+    manifest:
+      apiVersion: storage.k8s.io/v1
+      kind: StorageClass
+      metadata:
+        name: {{ $sc.name }}
+        labels: {{ $sc.labels | toJson }}
+        annotations:
+          storageclass.kubernetes.io/is-default-class: {{ ternary "true" "false" $sc.defaultClass | quote }}
+      provisioner: efs.csi.aws.com
+      parameters:
+        {{- toYaml $sc.parameters | nindent 8 }}
+      mountOptions:
+        {{- toYaml $sc.mountOptions | nindent 8 }}
+      reclaimPolicy: {{ $sc.reclaimPolicy }}
+      volumeBindingMode: {{ $sc.volumeBindingMode }}
+      allowVolumeExpansion: {{ $sc.allowVolumeExpansion }}
+  providerConfigRef:
+    name: {{ $efs.providerConfigRefs.kubernetes.name }}
+    kind: {{ $efs.providerConfigRefs.kubernetes.kind }}
+{{- if and ($state.observed.fileSystem.ready | default false) (get $state.observed.ready $sc.resourceKey | default false) }}
+---
+apiVersion: protection.crossplane.io/v1beta1
+kind: Usage
+metadata:
+  name: {{ $efs.name }}-delete-storage-class-{{ $sc.name }}-before-file-system
+  annotations:
+    {{ setResourceNameAnnotation (printf "usage-storage-class-%s-file-system" $sc.name) }}
+  labels: {{ $sc.labels | toJson }}
+spec:
+  replayDeletion: true
+  of:
+    apiVersion: efs.aws.m.upbound.io/v1beta1
+    kind: FileSystem
+    resourceRef:
+      name: {{ $efs.fileSystem.name }}
+  by:
+    apiVersion: kubernetes.m.crossplane.io/v1alpha1
+    kind: Object
+    resourceRef:
+      name: {{ $sc.resourceName }}
+{{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

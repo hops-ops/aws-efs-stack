@@ -1,0 +1,16 @@
+apiVersion: ec2.aws.m.upbound.io/v1beta1
+kind: SecurityGroup
+metadata:
+  name: gitkb-mt
+  annotations:
+    crossplane.io/composition-resource-name: security-group
+    gotemplating.fn.crossplane.io/composition-resource-name: security-group
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  atProvider:
+    id: sg-0efsmounttarget
+    arn: arn:aws:ec2:us-east-2:123456789012:security-group/sg-0efsmounttarget

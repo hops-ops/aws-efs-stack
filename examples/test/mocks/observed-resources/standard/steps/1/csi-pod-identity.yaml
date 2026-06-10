@@ -1,0 +1,18 @@
+apiVersion: aws.hops.ops.com.ai/v1alpha1
+kind: PodIdentity
+metadata:
+  name: gitkb-efs-csi
+  annotations:
+    crossplane.io/composition-resource-name: csi-pod-identity
+    gotemplating.fn.crossplane.io/composition-resource-name: csi-pod-identity
+status:
+  conditions:
+    - type: Ready
+      status: "True"
+    - type: Synced
+      status: "True"
+  podIdentity:
+    association:
+      id: a-0123456789abcdef0
+      associationArn: arn:aws:eks:us-east-2:123456789012:podidentityassociation/platform/a-0123456789abcdef0
+      roleArn: arn:aws:iam::123456789012:role/gitkb-efs-csi
