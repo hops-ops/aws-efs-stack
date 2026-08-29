@@ -11,6 +11,7 @@ _observed_file_system = {
     kind = "FileSystem"
     metadata = {
         name = "gitkb"
+        namespace = "default"
         annotations = {"crossplane.io/composition-resource-name" = "file-system"}
     }
     status = {
@@ -29,6 +30,7 @@ _observed_security_group = {
     kind = "SecurityGroup"
     metadata = {
         name = "gitkb-mt"
+        namespace = "default"
         annotations = {"crossplane.io/composition-resource-name" = "security-group"}
     }
     status = {
@@ -45,6 +47,7 @@ _observed_pod_identity = {
     kind = "PodIdentity"
     metadata = {
         name = "gitkb-efs-csi"
+        namespace = "default"
         annotations = {"crossplane.io/composition-resource-name" = "csi-pod-identity"}
     }
     status = {
