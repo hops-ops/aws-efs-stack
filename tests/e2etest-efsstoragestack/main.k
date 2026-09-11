@@ -219,7 +219,7 @@ _items = [
                                         {
                                             name = "writer"
                                             # renovate: datasource=docker depName=library/busybox registryUrl=https://index.docker.io
-                                            image = "busybox:1.37.0"
+                                            image = "busybox:1.38.0"
                                             command = ["sh", "-c", "echo " + _probe + " > /data/probe.txt && sync"]
                                             volumeMounts = [
                                                 {
@@ -279,7 +279,7 @@ _items = [
                                         {
                                             name = "reader"
                                             # renovate: datasource=docker depName=library/busybox registryUrl=https://index.docker.io
-                                            image = "busybox:1.37.0"
+                                            image = "busybox:1.38.0"
                                             command = [
                                                 "sh"
                                                 "-c"
